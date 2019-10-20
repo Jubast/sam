@@ -1,0 +1,19 @@
+name "client"
+description "client library for sam"
+targetType "library"
+sourcePaths "."
+importPaths "."
+
+dependency "sam:common" version="*"
+dependency "poodinis" version="~>8.0.3"
+
+configuration "unittest-debug" {
+    dependency "dmocks" version="~>2.0.5"
+    dependency "fluent-asserts" version="~>0.12.5"
+}
+
+configuration "unittest" {
+    dependency "silly" version="~>0.8.2"
+    dependency "unit-threaded:mocks" version="~>0.10.3"
+    dependency "fluent-asserts" version="~>0.12.5"
+}

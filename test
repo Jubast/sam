@@ -1,0 +1,22 @@
+#!/bin/bash
+
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
+
+if [ "$1" == ":common" ] || [ "$1" == "" ]
+then
+    echo -e "${BLUE}Testing common...${NC}"
+    dub test :common
+fi
+
+if [ "$1" == ":client" ] || [ "$1" == "" ]
+then
+    echo -e "${BLUE}Testing client...${NC}"
+    dub test :client
+fi
+
+if [ "$1" == ":server" ] || [ "$1" == "" ]
+then
+    echo -e "${BLUE}Testing server...${NC}"
+    dub test :server -- -t 1
+fi

@@ -1,0 +1,8 @@
+name "helloworld"
+description "sam example"
+authors "Jubast"
+copyright "Copyright © 2019, Jubast"
+license "MIT"
+
+dependency "sam:client" path="../../"
+dependency "sam:server" path="../../"

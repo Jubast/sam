@@ -1,0 +1,15 @@
+name "sam"
+description "simple actor model"
+authors "Jubast"
+copyright "Copyright © 2019, Jubast"
+license "MIT"
+targetType "library"
+
+dependency ":server" version="*"
+dependency ":client" version="*"
+dependency ":common" version="*"
+
+subPackage "./common/"
+subPackage "./client/"
+subPackage "./server/"
+

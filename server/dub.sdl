@@ -1,0 +1,19 @@
+name "server"
+description "server library for sam"
+targetType "library"
+sourcePaths "."
+importPaths "."
+
+dependency "sam:client" version="*"
+dependency "vibe-core" version="~>1.7.0"
+dependency "poodinis" version="~>8.0.3"
+
+configuration "unittest-debug" {
+    dependency "fluent-asserts" version="~>0.12.5"
+}
+
+configuration "unittest" {
+    dependency "silly" version="~>0.8.2"
+    dependency "unit-threaded:mocks" version="~>0.10.3"
+    dependency "fluent-asserts" version="~>0.12.5"
+}

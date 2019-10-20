@@ -1,0 +1,17 @@
+.dub
+docs.json
+__dummy.html
+docs/
+/sam
+sam.so
+sam.dylib
+sam.dll
+sam.a
+sam.lib
+sam-*-test-unittest
+*.exe
+*.o
+*.a
+*.obj
+*.lst
+*dub.selections.json

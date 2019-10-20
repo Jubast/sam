@@ -1,0 +1,16 @@
+name "common"
+description "common library for sam"
+targetType "library"
+sourcePaths "."
+importPaths "."
+
+dependency "poodinis" version="~>8.0.3"
+
+configuration "unittest-debug" {
+    dependency "fluent-asserts" version="~>0.12.5"
+}
+
+configuration "unittest" {
+    dependency "silly" version="~>0.8.2"
+    dependency "fluent-asserts" version="~>0.12.5"
+}
