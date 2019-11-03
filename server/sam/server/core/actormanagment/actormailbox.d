@@ -11,21 +11,32 @@ import sam.server.core.actormanagment.actormanager;
 
 class ActorMailbox
 {
-    private TaskMutex mutex;
-    private ActorManager manager;
+    private TaskMutex m_mutex;
+    private ActorManager m_manager;
 
     this(IActor actor, string actorId, ActorInfo info)
     {
-        this.mutex = new TaskMutex;
-        this.manager = new ActorManager(actor, actorId, info);
+        this.m_mutex = new TaskMutex;
+        this.m_manager = new ActorManager(actor, actorId, info);
     }
 
     Future!ActorResponse put(ActorMessage message)
     {
         return async({
-            synchronized (mutex)
+            synchronized (m_mutex)
             {
-                return manager.invoke(message);
+                return m_manager.invoke(message);
+            }
+        });
+    }
+
+    // used internaly for actor lifetime managmanet
+    package Future!ManagerResponse managerMessage(ManagerMessage message)
+    {
+        return async({
+            synchronized (m_mutex)
+            {
+                return m_manager.managerMessage(message);
             }
         });
     }

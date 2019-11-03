@@ -6,13 +6,13 @@ import sam.common.udas;
 
 abstract class Actor : IActor
 {
-    @ActorId string id;
+    @actorId string id;
 
-    override void onActivate()
+    void onActivate()
     {        
     }
 
-    override void onDeactivate()
+    void onDeactivate()
     {        
     }
 }

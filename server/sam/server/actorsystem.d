@@ -13,6 +13,7 @@ import sam.server.core.actormanagment.actorprovider;
 import sam.server.core.actormanagment.actorregistry;
 import sam.server.core.pipelines.messagereceiver;
 import sam.server.core.actormanagment.actorlifetime;
+import sam.server.core.actormanagment.options;
 
 import sam.client.messagesender;
 import sam.client.actorsystem;
@@ -61,17 +62,22 @@ class ActorSystemBuilder
     }
 }
 
-
 ActorSystemBuilder UseInMemoryActorSystem(ActorSystemBuilder builder)
 {
+    builder.container.UseDefaultOptions();
     builder.container.register!(IMessageSender, MessageSender);
     builder.container.register!(IMessageReceiver, MessageReceiver);
     builder.container.register!(ActorProvider);
     builder.container.register!(ActorCollection);
-    builder.container.register!(ActorLifetime);
+    builder.container.register!(ActorLifetime);    
 
     auto lifetime = builder.container.resolve!(ActorLifetime);
     lifetime.run;
 
     return builder;
+}
+
+private void UseDefaultOptions(shared(DependencyContainer) contianer)
+{
+    contianer.register!ActorLifetimeOptions();
 }

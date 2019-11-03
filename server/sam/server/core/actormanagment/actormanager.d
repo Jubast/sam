@@ -10,18 +10,6 @@ import sam.common.actorresponse;
 import sam.common.exceptions;
 import sam.server.core.actormanagment.actorinfo;
 
-class ActorManagerState
-{
-    SysTime lastInteraction;
-    ActorState state;
-
-    this(SysTime lastInteraction, ActorState state)
-    {
-        this.lastInteraction = lastInteraction;
-        this.state = state;
-    }
-}
-
 // Manages an Actor (Activation, Deactivation, MethodInvokes, etc.)
 // Each Actor (actor+id) have one Manager
 class ActorManager
@@ -38,33 +26,35 @@ class ActorManager
         this.actorId = actorId.notNull;
         this.actorInfo = actorInfo.notNull;
     }
-
-    // TODO: cleanup. please... :)
+    
     ActorResponse invoke(ActorMessage message)
-    {   
-        if(message.methodName == ":managerState:")
-        {            
-            Variant v;
-            v = new ActorManagerState(lastInteraction, state);
-            return new ActorResponse(v);
-        }
-
+    {
         lastInteraction = Clock.currTime(UTC());
 
-        if(state == state.Deactivated)
+        if(state == ActorState.Deactivated)
         {
             actor.onActivate();
+            state = ActorState.Activated;
         }
 
         auto method = actorInfo.getMethodFor(message);
         return method.invoke(actor, message.args);        
     }
-}
 
-enum ActorState
-{
-    Activated,
-    Deactivated
+    package ManagerResponse managerMessage(ManagerMessage message)
+    {
+        Variant v;
+        if(message.messageType == "getManagerState")
+        {            
+            v = new ActorManagerStatus(actorInfo.actorType, actorId, lastInteraction, state);            
+        }
+        if(message.messageType == "deactivate")
+        {
+            actor.onDeactivate;
+        }
+
+        return new ManagerResponse(v);
+    }
 }
 
 private MethodInfo getMethodFor(ActorInfo actorInfo, ActorMessage actorMessage)
@@ -101,4 +91,46 @@ private bool isForMethod(ActorMessage actorMessage, MethodInfo methodInfo)
     }
 
     return true;
+}
+
+enum ActorState
+{
+    Activated,
+    Deactivated
+}
+
+class ActorManagerStatus
+{
+    TypeInfo actorType;
+    string actorId;
+    SysTime lastInteraction;
+    ActorState state;
+
+    this(TypeInfo actorType, string actorId, SysTime lastInteraction, ActorState state)
+    {
+        this.actorType = actorType;
+        this.actorId = actorId;
+        this.lastInteraction = lastInteraction;
+        this.state = state;
+    }
+}
+
+class ManagerResponse
+{
+    Variant variant;
+
+    this(Variant variant)
+    {
+        this.variant = variant;
+    }
+}
+
+class ManagerMessage
+{
+    string messageType;
+
+    this(string messageType)
+    {
+        this.messageType = messageType;
+    }
 }
