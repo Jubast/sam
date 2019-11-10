@@ -2,7 +2,7 @@ module sam.server.core.actormanagment.actorprovider;
 
 import sam.common.enforce;
 import sam.common.interfaces.actor;
-import sam.server.core.actormanagment.actormailbox;
+import sam.server.core.actormanagment.activation;
 import sam.server.core.actormanagment.actorcollection;
 import sam.server.core.actormanagment.actorregistry;
 
@@ -17,7 +17,7 @@ class ActorProvider
 		this.actorRegistry = actorRegistry.notNull;
 	}
 
-	ActorMailbox mailboxOf(TypeInfo actorInfo, string actorId)
+	Activation activationOf(TypeInfo actorInfo, string actorId)
 	{
 		return actorCollection.getOrAdd(actorInfo, actorId, actorRegistry.actorInfoOf(actorInfo));
 	}

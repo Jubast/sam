@@ -20,6 +20,14 @@
             "target": "./examples/helloworld/helloworld",
             "cwd": "${workspaceRoot}",
             "valuesFormatting": "parseText"
+        },
+        {
+            "name": "Debug Server test",
+            "type": "gdb",
+            "request": "launch",
+            "target": "./server/sam-server-test-unittest",
+            "cwd": "${workspaceRoot}",
+            "valuesFormatting": "parseText"
         }
     ]
 }

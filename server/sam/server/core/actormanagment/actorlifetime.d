@@ -10,8 +10,8 @@ import std.variant;
 import sam.common.actorresponse;
 import sam.common.actormessage;
 import sam.server.core.actormanagment.actorcollection;
-import sam.server.core.actormanagment.actormailbox;
-import sam.server.core.actormanagment.actormanager;
+import sam.server.core.actormanagment.activation;
+import sam.server.core.actormanagment.actorinvoker;
 import sam.server.core.actormanagment.options;
 
 class ActorLifetime
@@ -34,8 +34,7 @@ class ActorLifetime
                 sleep(m_options.collectionDelay);
                 logInfo("Searching for actors to deactivate...");
 
-                auto sw = StopWatch(AutoStart.no);
-                sw.start;
+                auto sw = StopWatch(AutoStart.yes);
 
                 m_collection.removeAll(&canBeDeactivated);
 
@@ -45,12 +44,12 @@ class ActorLifetime
         });
     }
 
-    private bool canBeDeactivated(ActorManagerStatus managerState)
-    {        
+    private bool canBeDeactivated(ActorInvokerStatus invokerState)
+    {
         auto currTime = Clock.currTime(UTC()) -= m_options.maxIdle;
-
+        
         // if actor is idle for more than m_options.maxIdle
-        if(managerState.lastInteraction < currTime)
+        if(invokerState.lastInteraction < currTime)
         {
             return true;
         }

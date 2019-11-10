@@ -11,17 +11,17 @@ class ActorRegistry
     private ActorInfo[TypeInfo] m_actorInfos;
 
     this(DependencyContainer dependencies)
-    {        
-        this.m_dependencies = cast(shared)dependencies;        
+    {
+        this.m_dependencies = cast(shared) dependencies;
     }
 
     void register(TIActor : IActor, TActor : IActor)()
             if (is(TIActor == interface) && !__traits(isTemplate, TIActor)
                 && is(TActor == class) && !__traits(isTemplate, TActor))
     {
-        auto actorType = typeid(TIActor);        
+        auto actorType = typeid(TIActor);
         if ((actorType in m_actorInfos) == null)
-        {            
+        {
             m_actorInfos[actorType] = actorInfo!(TIActor, TActor);
         }
         else
@@ -32,15 +32,21 @@ class ActorRegistry
         }
     }
 
-    ActorInfo actorInfoOf(TypeInfo actorType)
-	{
-		auto p = actorType in m_actorInfos;
-		if (p !is null)
-		{
-			return *p;
-		}
+    auto registerdTypes()
+    {
+        return m_actorInfos.byKey;
+    }
 
-		throw new InvalidOperationException(
-				"Actor interface of type '" ~ actorType.stringof ~ "' doesn't exist in ActorResovler");
-	}
+    ActorInfo actorInfoOf(TypeInfo actorType)
+    {
+        auto p = actorType in m_actorInfos;
+        if (p !is null)
+        {
+            return *p;
+        }
+
+        throw new InvalidOperationException(
+                "Actor interface of type '" ~ actorType.stringof
+                ~ "' doesn't exist in ActorResovler");
+    }
 }

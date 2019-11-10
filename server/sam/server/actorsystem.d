@@ -57,7 +57,7 @@ class ActorSystemBuilder
     }
 
     ActorSystem build()
-    {
+    {        
         return new ActorSystem(m_container, m_actorRegistry);
     }
 }
@@ -69,7 +69,12 @@ ActorSystemBuilder UseInMemoryActorSystem(ActorSystemBuilder builder)
     builder.container.register!(IMessageReceiver, MessageReceiver);
     builder.container.register!(ActorProvider);
     builder.container.register!(ActorCollection);
-    builder.container.register!(ActorLifetime);    
+    builder.container.register!(ActorLifetime);
+
+    // TODO: create a lifecycle (PreBuild, PostBuild, PreRun, PostRun)
+    auto registry = builder.container.resolve!(ActorRegistry);
+    auto collection = builder.container.resolve!(ActorCollection);
+    collection.createDirectories(registry); // PostBuild
 
     auto lifetime = builder.container.resolve!(ActorLifetime);
     lifetime.run;

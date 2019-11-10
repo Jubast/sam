@@ -7,17 +7,18 @@ import sam.common.interfaces.actor;
 import sam.common.actormessage;
 import sam.common.actorresponse;
 import sam.server.core.actormanagment.actorinfo;
-import sam.server.core.actormanagment.actormanager;
+import sam.server.core.actormanagment.actorinvoker;
 
+// TODO: Implement own queue, don't rely on vibe-d Tasks
 class ActorMailbox
 {
     private TaskMutex m_mutex;
-    private ActorManager m_manager;
+    private ActorInvoker m_invoker;
 
     this(IActor actor, string actorId, ActorInfo info)
     {
         this.m_mutex = new TaskMutex;
-        this.m_manager = new ActorManager(actor, actorId, info);
+        this.m_invoker = new ActorInvoker(actor, actorId, info);
     }
 
     Future!ActorResponse put(ActorMessage message)
@@ -25,18 +26,18 @@ class ActorMailbox
         return async({
             synchronized (m_mutex)
             {
-                return m_manager.invoke(message);
+                return m_invoker.invoke(message);
             }
         });
     }
 
     // used internaly for actor lifetime managmanet
-    package Future!ManagerResponse managerMessage(ManagerMessage message)
+    package Future!InvokerResponse putInvoker(InvokerMessage message)
     {
         return async({
             synchronized (m_mutex)
             {
-                return m_manager.managerMessage(message);
+                return m_invoker.invokeInvoker(message);
             }
         });
     }
@@ -104,7 +105,7 @@ unittest
         exitEventLoop;
     });
 
-    runEventLoop;    
+    runEventLoop;
 
     counts.should.equal([1, 2, 3, 4, 5]);
     auto mesecs = sw.peek.total!"msecs";

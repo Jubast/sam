@@ -8,153 +8,101 @@ import vibe.core.log;
 
 import sam.common.enforce;
 import sam.common.actormessage;
+
+import sam.server.core.containers.aa;
+import sam.server.core.containers.concurrentaa;
 import sam.server.core.actormanagment.actorinfo;
-import sam.server.core.actormanagment.actormailbox;
-import sam.server.core.actormanagment.actormanager;
+import sam.server.core.actormanagment.activation;
+import sam.server.core.actormanagment.actorregistry;
+import sam.server.core.actormanagment.actorinvoker;
 
 class ActorCollection
 {
     private shared DependencyContainer m_container;
-    private TaskReadWriteMutex m_mutex;
-    private ActorDirectory[TypeInfo] m_actorDirectories;
+    private FixedLengthAA!(TypeInfo, ActorDirectory) m_directories;
 
     this(DependencyContainer container)
     {
         this.m_container = cast(shared) container.notNull;
-        m_mutex = new TaskReadWriteMutex;
+        this.m_directories = new FixedLengthAA!(TypeInfo, ActorDirectory);
     }
 
-    ActorMailbox getOrAdd(TypeInfo actorType, string actorId, lazy ActorInfo lazyActorInfo)
+    void createDirectories(ActorRegistry registry)
     {
-        ActorDirectory directory;
-        synchronized (m_mutex.reader)
+        foreach (actorType; registry.registerdTypes())
         {
-            auto actorDirectoryPtr = actorType in m_actorDirectories;
-            if (actorDirectoryPtr !is null)
-            {
-                directory = *actorDirectoryPtr;
-            }
+            m_directories[actorType] = new ActorDirectory(actorType, m_container);
         }
-
-        if (directory !is null)
-        {
-            return directory.getOrAdd(actorId, lazyActorInfo);
-        }
-
-        synchronized (m_mutex.writer)
-        {
-            auto actorDirectoryPtr = actorType in m_actorDirectories;
-            if (actorDirectoryPtr !is null)
-            {
-                return (*actorDirectoryPtr).getOrAdd(actorId, lazyActorInfo);
-            }
-
-            directory = new ActorDirectory(actorType, m_container);
-            m_actorDirectories[actorType] = directory;
-        }
-
-        return directory.getOrAdd(actorId, lazyActorInfo);
+        m_directories.lock();
     }
 
-    void removeAll(bool delegate(ActorManagerStatus) predicate)
+    Activation getOrAdd(TypeInfo actorType, string actorId, lazy ActorInfo lazyActorInfo)
     {
-        Task[] tasks;
-        synchronized (m_mutex.reader)
-        {
-            foreach (directory; m_actorDirectories)
-            {
-                tasks ~= runTask({ directory.removeAll(predicate); });
-            }
-        }
+        return m_directories[actorType].getOrAdd(actorId, lazyActorInfo);
+    }
 
-        foreach(ref task; tasks) 
+    void removeAll(bool delegate(ActorInvokerStatus) predicate)
+    {
+        foreach (directory; m_directories)
         {
-            task.join();
+            directory.removeAll(predicate);
         }
     }
 }
 
 class ActorDirectory
 {
-    private TaskReadWriteMutex m_mutex;
     private TypeInfo m_actorType;
     private shared DependencyContainer m_container;
-    private ActorMailbox[string] m_actorCollection;
+    private TaskConcurrentAA!(string, Activation) m_activations;
 
     this(TypeInfo actorType, shared DependencyContainer container)
     {
-        this.m_mutex = new TaskReadWriteMutex;
         this.m_actorType = actorType;
-        this.m_container = container;
+        this.m_activations = new TaskConcurrentAA!(string, Activation);
     }
 
-    ActorMailbox getOrAdd(string actorId, lazy ActorInfo lazyActorInfo)
+    Activation getOrAdd(string actorId, lazy ActorInfo lazyActorInfo)
     {
-        synchronized (m_mutex.reader)
-        {
-            auto actorMailboxPtr = actorId in m_actorCollection;
-            if (actorMailboxPtr !is null)
-            {
-                return *actorMailboxPtr;
-            }
-        }
-
-        synchronized (m_mutex.writer)
-        {
-            auto actorMailboxPtr = actorId in m_actorCollection;
-            if (actorMailboxPtr !is null)
-            {
-                return *actorMailboxPtr;
-            }
-
-            auto actorInfo = lazyActorInfo();
-            auto actor = actorInfo.resolver()(m_container, actorId);
-            auto mailbox = new ActorMailbox(actor, actorId, actorInfo);
-            m_actorCollection[actorId] = mailbox;
-
-            return mailbox;
-        }
+        return m_activations.getOrAdd(actorId, () => activationDelegate(actorId, lazyActorInfo));
     }
 
-    void removeAll(bool delegate(ActorManagerStatus) predicate)
+    void removeAll(bool delegate(ActorInvokerStatus) predicate)
     {
-        ActorMailbox[string] actorCollection;
-        synchronized (m_mutex.reader)
+        Activation[string] activations = m_activations.dupUnsafe;
+
+        Task[] tasks;
+        foreach (keyValue; activations.byKeyValue)
         {
-            actorCollection = m_actorCollection.dup;
-        }
+            tasks ~= runTask({
+                auto actorId = keyValue.key;
+                auto activation = keyValue.value;
 
-        foreach (keyValue; actorCollection.byKeyValue)
-        {
-            auto actorId = keyValue.key;
-            auto actorMailbox = keyValue.value;
-
-            auto state = actorMailbox.managerMessage(getManagerState)
-                .getResult.variant.get!ActorManagerStatus;
-
-            if (predicate(state))
-            {
-                synchronized (m_mutex.writer)
+                auto state = activation.invokerState().variant.get!ActorInvokerStatus;
+                if (predicate(state))
                 {
-                    if ((actorId in m_actorCollection) !is null)
-                    {
-                        logInfo("Deactivating '" ~ m_actorType.toString ~ ":" ~ actorId ~ "'..");
-                        actorMailbox.managerMessage(deactivateActor);
-                        m_actorCollection.remove(actorId);
-                    }
+                    activation.deactivate();
+                    m_activations.remove(actorId);
                 }
-            }
+
+            });
+        }
+
+        foreach (task; tasks)
+        {
+            task.join();
         }
     }
 
-    private static ManagerMessage deactivateActor()
+    private Activation activationDelegate(string actorId, lazy ActorInfo lazyActorInfo)
     {
-        return new ManagerMessage("deactivate");
-    }
+        auto actorInfo = lazyActorInfo();
+        auto actor = actorInfo.resolver()(m_container, actorId);
+        auto activation = new Activation(actor, actorId, actorInfo);
 
-    private static ManagerMessage getManagerState()
-    {
-        return new ManagerMessage("getManagerState");
+        // TODO: don't leave the activate task in the void
+        runTask({ activation.activate(); });
+        return activation;
     }
 }
 
@@ -184,96 +132,121 @@ version (unittest)
         {
         }
     }
+
+    ActorCollection preparedActorCollection()
+    {
+        auto dependencies = new shared DependencyContainer();
+        auto actorRegistry = new ActorRegistry(cast(DependencyContainer) dependencies);
+        actorRegistry.register!(ITestActor, TestActor);
+
+        auto actorCollection = new ActorCollection(cast(DependencyContainer) dependencies);
+        actorCollection.createDirectories(actorRegistry);
+        return actorCollection;
+    }
 }
 
-@("getOrAdd should create directory and actor")
+@("createDirectories should create Directories from ActorRegistry and lock")
 unittest
 {
     auto dependencies = new shared DependencyContainer();
-    auto actorInfo = actorInfo!(ITestActor, TestActor)();
+    auto actorRegistry = new ActorRegistry(cast(DependencyContainer) dependencies);
+    actorRegistry.register!(ITestActor, TestActor);
 
     auto actorCollection = new ActorCollection(cast(DependencyContainer) dependencies);
+    actorCollection.createDirectories(actorRegistry);
+
+    actorCollection.m_directories.length.should.equal(1);
+    actorCollection.m_directories[typeid(ITestActor)].should.not.equal(null);
+    actorCollection.m_directories.locked.should.equal(true);
+}
+
+@("getOrAdd should get directory and create activation")
+unittest
+{
+    auto actorCollection = preparedActorCollection();
+    auto actorInfo = actorInfo!(ITestActor, TestActor)();
+
     auto id = randomUUID.toString;
     auto newActor = actorCollection.getOrAdd(typeid(ITestActor), id, actorInfo);
 
-    actorCollection.m_actorDirectories.length.should.equal(1);
-    auto directoryPtr = typeid(ITestActor) in actorCollection.m_actorDirectories;
-    assert(directoryPtr !is null, "ActorDirectory was not created!");
+    auto directory = *(typeid(ITestActor) in actorCollection.m_directories);
+    directory.m_activations.length.should.equal(1);
 
-    auto directory = *directoryPtr;
-    directory.m_actorCollection.length.should.equal(1);
-    auto actorPtr = id in directory.m_actorCollection;
-    assert(actorPtr !is null, "ActorMailbox was not created!");
+    auto actorPtr = id in directory.m_activations;
+    assert(actorPtr !is null, "Activation was not created!");
 }
 
-@("getOrAdd should return existing actor")
+@("getOrAdd should return existing activation")
 unittest
 {
     auto dependencies = new shared DependencyContainer();
+    auto actorCollection = preparedActorCollection();
     auto actorInfo = actorInfo!(ITestActor, TestActor)();
-
-    auto actorCollection = new ActorCollection(cast(DependencyContainer) dependencies);
-    auto directory = new ActorDirectory(typeid(ITestActor), dependencies);
-    actorCollection.m_actorDirectories[typeid(ITestActor)] = directory;
 
     auto id = randomUUID.toString;
     auto actor = actorInfo.resolver()(dependencies, id);
-    auto mailbox = new ActorMailbox(actor, id, actorInfo);
-    directory.m_actorCollection[id] = mailbox;
+    auto activation = new Activation(actor, id, actorInfo);
+    actorCollection.m_directories[typeid(ITestActor)].m_activations.getOrAdd(id, () => activation);
 
-    auto returnedMailbox = actorCollection.getOrAdd(typeid(ITestActor), id, actorInfo);
-    actorCollection.m_actorDirectories.length.should.equal(1);
-    (mailbox == returnedMailbox).should.equal(true);
+    auto returnedActivation = actorCollection.getOrAdd(typeid(ITestActor), id, actorInfo);
+    actorCollection.m_directories.length.should.equal(1);
+    (activation == returnedActivation).should.equal(true);
 }
 
 @("removeAll with true predicate should remove all")
 unittest
 {
-    auto dependencies = new shared DependencyContainer();
+    auto actorCollection = preparedActorCollection();
     auto actorInfo = actorInfo!(ITestActor, TestActor)();
 
-    auto actorCollection = new ActorCollection(cast(DependencyContainer) dependencies);
     actorCollection.getOrAdd(typeid(ITestActor), randomUUID.toString, actorInfo);
     actorCollection.getOrAdd(typeid(ITestActor), randomUUID.toString, actorInfo);
     actorCollection.getOrAdd(typeid(ITestActor), randomUUID.toString, actorInfo);
 
-    actorCollection.m_actorDirectories[typeid(ITestActor)].m_actorCollection.length.should.equal(3);
-    actorCollection.removeAll(x => true);
+    actorCollection.m_directories[typeid(ITestActor)].m_activations.length.should.equal(3);
+    runTask({ actorCollection.removeAll(x => true); exitEventLoop; });
 
-    actorCollection.m_actorDirectories[typeid(ITestActor)].m_actorCollection.length.should.equal(0);
+    runEventLoop;
+
+    actorCollection.m_directories[typeid(ITestActor)].m_activations.length.should.equal(0);
 }
 
 @("removeAll with false predicate should not remove any")
 unittest
 {
-    auto dependencies = new shared DependencyContainer();
+    auto actorCollection = preparedActorCollection();
     auto actorInfo = actorInfo!(ITestActor, TestActor)();
 
-    auto actorCollection = new ActorCollection(cast(DependencyContainer) dependencies);
     actorCollection.getOrAdd(typeid(ITestActor), randomUUID.toString, actorInfo);
     actorCollection.getOrAdd(typeid(ITestActor), randomUUID.toString, actorInfo);
     actorCollection.getOrAdd(typeid(ITestActor), randomUUID.toString, actorInfo);
 
-    actorCollection.m_actorDirectories[typeid(ITestActor)].m_actorCollection.length.should.equal(3);
-    actorCollection.removeAll(x => false);
+    actorCollection.m_directories[typeid(ITestActor)].m_activations.length.should.equal(3);
+    runTask({ actorCollection.removeAll(x => false); exitEventLoop; });
 
-    actorCollection.m_actorDirectories[typeid(ITestActor)].m_actorCollection.length.should.equal(3);
+    runEventLoop;
+
+    actorCollection.m_directories[typeid(ITestActor)].m_activations.length.should.equal(3);
 }
 
 @("removeAll with predicate should remove")
 unittest
 {
-    auto dependencies = new shared DependencyContainer();
+    import std.stdio;
+    import std.conv;
+
+    auto actorCollection = preparedActorCollection();
     auto actorInfo = actorInfo!(ITestActor, TestActor)();
 
-    auto actorCollection = new ActorCollection(cast(DependencyContainer) dependencies);
     auto knownId = randomUUID.toString;
     actorCollection.getOrAdd(typeid(ITestActor), knownId, actorInfo);
     actorCollection.getOrAdd(typeid(ITestActor), randomUUID.toString, actorInfo);
     actorCollection.getOrAdd(typeid(ITestActor), randomUUID.toString, actorInfo);
 
-    actorCollection.m_actorDirectories[typeid(ITestActor)].m_actorCollection.length.should.equal(3);
-    actorCollection.removeAll(x => x.actorId == knownId);
+    actorCollection.m_directories[typeid(ITestActor)].m_activations.length.should.equal(3);
+    runTask({ actorCollection.removeAll(x => x.actorId == knownId); exitEventLoop; });
 
-    actorCollection.m_actorDirectories[typeid(ITestActor)].m_actorCollection.length.should.equal(2);
+    runEventLoop;
+
+    actorCollection.m_directories[typeid(ITestActor)].m_activations.length.should.equal(2);
 }

@@ -1,5 +1,7 @@
 module sam.common.utils;
 
+import std.conv;
+
 template nameOf(alias nameType)
 {
     enum nameOf = __traits(identifier, nameType);
@@ -8,6 +10,11 @@ template nameOf(alias nameType)
 template ctString(alias strings)
 {
     enum ctString = strings;
+}
+
+string actorPath(TypeInfo actorType, string id)
+{
+    return to!string(actorType) ~ ":" ~ id;
 }
 
 version (unittest)

@@ -1,6 +1,6 @@
 module sam.server.core.exceptions;
 
-class ActorException : Exception
+class ActorInvokerException : Exception
 {
     @safe this(string message, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
     {
@@ -8,7 +8,7 @@ class ActorException : Exception
     }
 }
 
-class DuplicateActorException : ActorException
+class ActorNotActivatedException : ActorInvokerException
 {
     @safe this(string message, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
     {
@@ -16,7 +16,7 @@ class DuplicateActorException : ActorException
     }
 }
 
-class UnknownActorMessageException : ActorException
+class ActorDeactivatedException : ActorInvokerException
 {
     @safe this(string message, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
     {
@@ -24,7 +24,7 @@ class UnknownActorMessageException : ActorException
     }
 }
 
-class InvalidActorMessageException : ActorException
+class InvalidActorMessageException : ActorInvokerException
 {
     @safe this(string message, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
     {

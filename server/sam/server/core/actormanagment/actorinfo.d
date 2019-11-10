@@ -42,11 +42,11 @@ class ActorInfo
 
 ActorInfo actorInfo(TIActor : IActor, TActor : IActor)()
         if (is(TIActor == interface) && !__traits(isTemplate, TIActor)
-        && is(TActor == class) && !__traits(isTemplate, TActor))
+            && is(TActor == class) && !__traits(isTemplate, TActor))
 {
     static IActor resolve(shared DependencyContainer container, string id)
     {
-        return new ActorActivator!TActor(cast(DependencyContainer) container).getInstance(id);        
+        return new ActorActivator!TActor(cast(DependencyContainer) container).getInstance(id);
     }
 
     return new ActorInfo(typeid(TIActor), &resolve, methodInfos!TIActor);
@@ -75,21 +75,32 @@ MethodInfo[] methodInfos(TIActor : IActor)()
 
     static foreach (member; __traits(allMembers, TIActor))
     {
-        static foreach (index, overload; __traits(getOverloads, TIActor, member))
+        static if (member == "onActivate")
         {
-            static if (__traits(isVirtualMethod, overload))
+            // skip
+        }
+        static if (member == "onDeactivate")
+        {
+            // skip
+        }
+        else
+        {
+            static foreach (index, overload; __traits(getOverloads, TIActor, member))
             {
+                static if (__traits(isVirtualMethod, overload))
                 {
-                    alias Params = Parameters!overload;                    
-
-                    TypeInfo[] types;
-                    foreach (Param; Params)
                     {
-                        types ~= typeid(Param);
-                    }
+                        alias Params = Parameters!overload;
 
-                    auto func = &invokeMethod!(member, overload, TIActor);
-                    methodInfos ~= new MethodInfo(member, types, func);
+                        TypeInfo[] types;
+                        foreach (Param; Params)
+                        {
+                            types ~= typeid(Param);
+                        }
+
+                        auto func = &invokeMethod!(member, overload, TIActor);
+                        methodInfos ~= new MethodInfo(member, types, func);
+                    }
                 }
             }
         }
@@ -100,7 +111,7 @@ MethodInfo[] methodInfos(TIActor : IActor)()
 
 ActorResponse invokeMethod(string methodName, alias overload, TIActor)(IActor obj, Variant[] vArgs)
 {
-    alias Params = Parameters!overload;       
+    alias Params = Parameters!overload;
 
     Params args;
     foreach (i, Param; Params)
@@ -109,7 +120,7 @@ ActorResponse invokeMethod(string methodName, alias overload, TIActor)(IActor ob
     }
 
     auto actor = cast(TIActor) obj;
-    
+
     static if (is(ReturnType!overload == void))
     {
         mixin("actor." ~ methodName)(args);
@@ -117,9 +128,9 @@ ActorResponse invokeMethod(string methodName, alias overload, TIActor)(IActor ob
         return new ActorResponse(v);
     }
     else
-    {        
+    {
         Variant v;
         v = mixin("actor." ~ methodName)(args);
         return new ActorResponse(v);
-    }    
+    }
 }
