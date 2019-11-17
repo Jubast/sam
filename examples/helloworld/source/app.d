@@ -4,6 +4,7 @@ import std.uuid;
 import std.conv;
 import core.time;
 import vibe.core.core;
+import vibe.core.log : setLogLevel, LogLevel;
 
 import sam.server.actor : Actor;
 import sam.server.actorsystem : ActorSystem, ActorSystemBuilder, UseInMemoryActorSystem;
@@ -24,22 +25,25 @@ class HelloWorldActor : Actor, IHelloWorldActor
 
 void main()
 {
+	//setLogLevel(LogLevel.warn);
+
 	auto actorSystem = new ActorSystemBuilder() //
-	.register!(IHelloWorldActor, HelloWorldActor) //
-	.UseInMemoryActorSystem //
-	.build;
+	.register!(IHelloWorldActor, HelloWorldActor)() //
+	.UseInMemoryActorSystem() //
+	.build();
 
-	auto client = actorSystem.clientOf;
+	auto client = actorSystem.clientOf();
 
-	runTask({
-		while(true)
+	runTask({		
+		while (true)
 		{
 			sleep(500.msecs);
 			auto actorId = randomUUID.toString;
 			auto actor = client.actorOf!IHelloWorldActor(actorId);
 			actor.sayHi("example runner");
 		}
-	});	
+	});
 
-	runApplication;
+	actorSystem.start();
+	actorSystem.stop();
 }

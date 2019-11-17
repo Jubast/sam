@@ -49,9 +49,10 @@ version (unittest)
     import core.time : msecs;
     import std.uuid;
     import vibe.core.core;
+    import vibe.core.args;
     import sam.server.actor;
     import sam.server.actorsystem;
-    import sam.common.interfaces.actor;    
+    import sam.common.interfaces.actor;
 
     import fluent.asserts;
 
@@ -88,16 +89,15 @@ unittest
 
     Task[] tasks;
     int[] counts;
-    auto test = runTask({                
+    auto test = runTask({
         for (int i = 0; i < 5; ++i)
-        {            
+        {
             auto actor = client.actorOf!ITestActor("test");
-            tasks ~= runTask({
-                counts ~= actor.waitAndGetCount(500);
-            });
+            tasks ~= runTask({ counts ~= actor.waitAndGetCount(500); });
         }
 
-        foreach(task; tasks) {
+        foreach (task; tasks)
+        {
             task.join();
         }
 
@@ -105,11 +105,13 @@ unittest
         exitEventLoop;
     });
 
-    runEventLoop;
+    setCommandLineArgs([]);
+    actorSystem.start();
+    actorSystem.stop();
 
     counts.should.equal([1, 2, 3, 4, 5]);
     auto mesecs = sw.peek.total!"msecs";
-    mesecs.should.be.approximately(5*500, 10);    
+    mesecs.should.be.approximately(5 * 500, 10);
 }
 
 @("diffrenct actors should get processed instantly")
@@ -127,26 +129,27 @@ unittest
 
     Task[] tasks;
     int[] counts;
-    auto test = runTask({        
+    auto test = runTask({
         for (int i = 0; i < 5; ++i)
         {
             auto actor = client.actorOf!ITestActor(randomUUID.toString);
-            tasks ~= runTask({
-                counts ~= actor.waitAndGetCount(500);
-            });
+            tasks ~= runTask({ counts ~= actor.waitAndGetCount(500); });
         }
 
-        foreach(task; tasks) {
+        foreach (task; tasks)
+        {
             task.join();
         }
 
         sw.stop;
-        exitEventLoop;
+        exitEventLoop;        
     });
 
-    runEventLoop;
+    setCommandLineArgs([]);
+    actorSystem.start();
+    actorSystem.stop();
 
     counts.should.equal([1, 1, 1, 1, 1]);
     auto mesecs = sw.peek.total!"msecs";
-    mesecs.should.be.approximately(500, 50);    
+    mesecs.should.be.approximately(500, 50);
 }

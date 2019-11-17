@@ -8,6 +8,7 @@ import vibe.core.log;
 
 import sam.common.enforce;
 import sam.common.actormessage;
+import sam.common.exceptions;
 
 import sam.server.core.containers.aa;
 import sam.server.core.containers.concurrentaa;
@@ -15,30 +16,32 @@ import sam.server.core.actormanagment.actorinfo;
 import sam.server.core.actormanagment.activation;
 import sam.server.core.actormanagment.actorregistry;
 import sam.server.core.actormanagment.actorinvoker;
+import sam.server.core.lifecycle;
 
-class ActorCollection
+class ActorCollection : ILifecycleParticipant
 {
     private shared DependencyContainer m_container;
-    private FixedLengthAA!(TypeInfo, ActorDirectory) m_directories;
+    private LockabileAA!(TypeInfo, ActorDirectory) m_directories;
+    private bool stopping;
 
     this(DependencyContainer container)
     {
         this.m_container = cast(shared) container.notNull;
-        this.m_directories = new FixedLengthAA!(TypeInfo, ActorDirectory);
-    }
-
-    void createDirectories(ActorRegistry registry)
-    {
-        foreach (actorType; registry.registerdTypes())
-        {
-            m_directories[actorType] = new ActorDirectory(actorType, m_container);
-        }
-        m_directories.lock();
-    }
+    }    
 
     Activation getOrAdd(TypeInfo actorType, string actorId, lazy ActorInfo lazyActorInfo)
     {
-        return m_directories[actorType].getOrAdd(actorId, lazyActorInfo);
+        m_directories.notNull;
+        actorType.notNull;
+        actorId.notNull;
+        lazyActorInfo.notNull;
+
+        if(!stopping)
+        {
+            return m_directories[actorType].getOrAdd(actorId, lazyActorInfo);
+        }
+
+        throw new InvalidOperationException("Request rejected because ActorCollection is stopping");
     }
 
     void removeAll(bool delegate(ActorInvokerStatus) predicate)
@@ -47,6 +50,28 @@ class ActorCollection
         {
             directory.removeAll(predicate);
         }
+    }
+
+    private void init()
+    {
+        logInfo("ActorCollection is initializing...");
+        this.m_directories = new LockabileAA!(TypeInfo, ActorDirectory);
+        foreach (actorType; m_container.resolve!(ActorRegistry)().registerdTypes())
+        {
+            m_directories[actorType] = new ActorDirectory(actorType, m_container);
+        }
+        m_directories.lock();
+    }
+
+    private void stop()
+    {
+        logInfo("ActorCollection is stopping...");
+        stopping = true;
+    }
+
+    void participate(ILifecycleObservable observable)
+    {
+        observable.subscribe(SystemLifecycleStage.PreStart, &init, &stop);
     }
 }
 
@@ -138,9 +163,10 @@ version (unittest)
         auto dependencies = new shared DependencyContainer();
         auto actorRegistry = new ActorRegistry(cast(DependencyContainer) dependencies);
         actorRegistry.register!(ITestActor, TestActor);
+        dependencies.register!ActorRegistry().existingInstance(actorRegistry);
 
         auto actorCollection = new ActorCollection(cast(DependencyContainer) dependencies);
-        actorCollection.createDirectories(actorRegistry);
+        actorCollection.init();
         return actorCollection;
     }
 }
@@ -151,9 +177,10 @@ unittest
     auto dependencies = new shared DependencyContainer();
     auto actorRegistry = new ActorRegistry(cast(DependencyContainer) dependencies);
     actorRegistry.register!(ITestActor, TestActor);
+    dependencies.register!ActorRegistry().existingInstance(actorRegistry);
 
     auto actorCollection = new ActorCollection(cast(DependencyContainer) dependencies);
-    actorCollection.createDirectories(actorRegistry);
+    actorCollection.init();
 
     actorCollection.m_directories.length.should.equal(1);
     actorCollection.m_directories[typeid(ITestActor)].should.not.equal(null);

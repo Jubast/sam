@@ -2,7 +2,7 @@ module sam.server.core.containers.aa;
 
 import sam.common.exceptions;
 
-class FixedLengthAA(TKey, TValue)
+class LockabileAA(TKey, TValue)
 {
     private bool m_isLocked;
     private TValue[TKey] m_aa;
@@ -88,7 +88,7 @@ version(unittest)
 @("Index get / set should succeed")
 unittest
 {
-    auto aa = new FixedLengthAA!(string, string);
+    auto aa = new LockabileAA!(string, string);
     aa["test"] = "123";
 
     aa["test"].should.equal("123");
@@ -97,7 +97,7 @@ unittest
 @("Index override should succeed")
 unittest
 {
-    auto aa = new FixedLengthAA!(string, string);
+    auto aa = new LockabileAA!(string, string);
     aa["test"] = "123";
     aa["test"] = "1234";
 
@@ -107,14 +107,14 @@ unittest
 @("Get unknown should throw")
 unittest
 {
-    auto aa = new FixedLengthAA!(string, string);
+    auto aa = new LockabileAA!(string, string);
     aa["test"].should.throwException!InvalidOperationException;
 }
 
 @("length should work")
 unittest
 {
-    auto aa = new FixedLengthAA!(string, string);
+    auto aa = new LockabileAA!(string, string);
     aa["test"] = "test";
 
     aa.length.should.equal(1);
@@ -127,7 +127,7 @@ unittest
 @("foreach should work")
 unittest
 {
-    auto aa = new FixedLengthAA!(string, string);
+    auto aa = new LockabileAA!(string, string);
     aa["testA"] = "test1";
     aa["testB"] = "test2";
 
