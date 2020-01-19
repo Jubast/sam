@@ -1,5 +1,7 @@
 module sam.server.core.containers.concurrentaa;
 
+import std.typecons;
+
 import vibe.core.core;
 import vibe.core.sync;
 import vibe.core.log;
@@ -14,7 +16,7 @@ class TaskConcurrentAA(TKey, TValue)
         this.m_mutex = new TaskReadWriteMutex();
     }
 
-    TValue getOrAdd(TKey key, TValue delegate() lazyValue)
+    TValue getOrAdd(TKey key, Tuple!(TValue, Task) delegate() lazyValue)
     {
         synchronized (m_mutex.reader)
         {
@@ -25,6 +27,7 @@ class TaskConcurrentAA(TKey, TValue)
             }
         }
 
+        Tuple!(TValue, Task) value;
         synchronized (m_mutex.writer)
         {
             auto valuePtr = key in m_aa;
@@ -33,17 +36,20 @@ class TaskConcurrentAA(TKey, TValue)
                 return *valuePtr;
             }
             
-            auto value = lazyValue();
-            m_aa[key] = value;
-            return value;
+            value = lazyValue();
+            m_aa[key] = value[0];            
         }
+
+        // wait for the task to complete
+        value[1].join();
+        return value[0];
     }
 
-    void remove(TKey key)
+    bool remove(TKey key)
     {
         synchronized (m_mutex.writer)
         {
-            m_aa.remove(key);
+            return m_aa.remove(key);
         }
     }
 

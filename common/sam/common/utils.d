@@ -1,5 +1,6 @@
 module sam.common.utils;
 
+import std.traits;
 import std.conv;
 
 template nameOf(alias nameType)
@@ -16,6 +17,9 @@ string actorPath(TypeInfo actorType, string id)
 {
     return to!string(actorType) ~ ":" ~ id;
 }
+
+enum bool isValidReferenceTypeActorArgument(T) = (is(T == class) || isArray!T || isAssociativeArray!T) && !__traits(isTemplate, T);
+enum bool isValidValueTypeActorArgument(T) = (is(T == struct) || is(T == enum)) && !__traits(isTemplate, T);
 
 version (unittest)
 {

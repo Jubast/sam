@@ -1,19 +1,13 @@
-module sam.server.core.actormanagment.actorregistry;
+module sam.server.core.introspection.actorregistry;
 
-import poodinis;
 import sam.common.interfaces.actor;
-import sam.server.core.actormanagment.actorinfo;
 import sam.common.exceptions;
+
+import sam.server.core.introspection.actorinfo;
 
 class ActorRegistry
 {
-    private shared DependencyContainer m_dependencies;
     private ActorInfo[TypeInfo] m_actorInfos;
-
-    this(DependencyContainer dependencies)
-    {
-        this.m_dependencies = cast(shared) dependencies;
-    }
 
     void register(TIActor : IActor, TActor : IActor)()
             if (is(TIActor == interface) && !__traits(isTemplate, TIActor)

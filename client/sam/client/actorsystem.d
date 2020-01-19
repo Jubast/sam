@@ -1,10 +1,11 @@
 module sam.client.actorsystem;
 
-import poodinis;
 import sam.client.actorref;
+
 import sam.common.enforce;
 import sam.common.interfaces.actor;
 import sam.common.interfaces.messagesender;
+import sam.common.interfaces.actorsystem;
 
 class ActorSystemClient
 {
@@ -19,4 +20,9 @@ class ActorSystemClient
     {
         return new ActorRef!TIActor(id, messageSender);
     }
+}
+
+ActorSystemClient clientOf(IActorSystem actorSystem)
+{
+    return new ActorSystemClient(actorSystem.container.resolve!IMessageSender);
 }

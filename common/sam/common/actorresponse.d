@@ -1,13 +1,13 @@
 module sam.common.actorresponse;
 
-import std.variant;
+import sam.common.argument;
 
 class ActorResponse
 {
-    Variant variant;
+    Argument value;
 
-    this(Variant variant)
+    this(T)(T value)
     {
-        this.variant = variant;
+        this.value = new Argument(value);
     }
 }

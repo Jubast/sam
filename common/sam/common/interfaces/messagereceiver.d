@@ -1,6 +1,5 @@
 module sam.common.interfaces.messagereceiver;
 
-import std.variant;
 import sam.common.actormessage;
 import sam.common.actorresponse;
 

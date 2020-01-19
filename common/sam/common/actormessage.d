@@ -1,21 +1,25 @@
 module sam.common.actormessage;
 
-import std.variant;
 import sam.common.enforce;
+import sam.common.argument;
 
 class ActorMessage
 {
     TypeInfo actorType;
     string actorId;
     string methodName;
-    Variant[] args;
+    Argument[] args;
 
-    this(TypeInfo actorType, string actorId, string methodName, Variant[] args)
+    this(Args...)(TypeInfo actorType, string actorId, string methodName, Args args)
     {
         this.actorType = actorType.notNull;
         this.actorId = actorId.notNull;
         this.methodName = methodName.notNull;
-        this.args = args;
+
+        static foreach (arg; args)
+        {
+            this.args ~= new Argument(arg);
+        }
     }
 
     override bool opEquals(Object b)
@@ -41,7 +45,8 @@ version (unittest)
 @("ctor should not throw")
 unittest
 {
-    (new ActorMessage(typeid(ActorMessage), "test", "test", [])).should.not.throwAnyException;
+    (new ActorMessage(typeid(ActorMessage), "test", "test")).should.not.throwAnyException;
+    (new ActorMessage(typeid(ActorMessage), "test", "test", [])).should.not.throwAnyException;    
 }
 
 @("ctor missing actorType should throw")
@@ -53,13 +58,15 @@ unittest
 @("ctor missing actorId should throw")
 unittest
 {
-    (new ActorMessage(typeid(ActorMessage), null, "test", [])).should.throwException!ArgumentException;
+    (new ActorMessage(typeid(ActorMessage), null, "test", [])).should
+        .throwException!ArgumentException;
 }
 
 @("ctor missing methodName should throw")
 unittest
 {
-    (new ActorMessage(typeid(ActorMessage), "test", null, [])).should.throwException!ArgumentException;
+    (new ActorMessage(typeid(ActorMessage), "test", null, [])).should
+        .throwException!ArgumentException;
 }
 
 @("opEquals should work")
@@ -68,7 +75,7 @@ unittest
     auto type = typeid(ActorMessage);
     auto id = randomUUID.toString;
     auto method = randomUUID.toString;
-    Variant[0] args;
+    Argument[0] args;
 
     auto actorMessage1 = new ActorMessage(type, id, method, args);
     auto actorMessage2 = new ActorMessage(type, id, method, args);
@@ -82,7 +89,7 @@ unittest
     auto type = typeid(ActorMessage);
     auto id = randomUUID.toString;
     auto method = randomUUID.toString;
-    Variant[0] args;
+    Argument[0] args;
 
     auto actorMessage1 = new ActorMessage(type, id, method, args);
     auto actorMessage2 = new ActorMessage(type, id, method, args);

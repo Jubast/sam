@@ -1,140 +1,93 @@
 module sam.server.actorsystem;
 
-import poodinis;
+import std.conv;
+import core.stdc.signal;
+
+import eventcore.core;
 import vibe.core.core;
 import vibe.core.log;
+import vibe.core.sync;
 
 import sam.common.enforce;
+import sam.common.interfaces.actorsystem;
 import sam.common.interfaces.messagereceiver;
 import sam.common.interfaces.messagesender;
 import sam.common.interfaces.actor;
+import sam.common.dependencyinjection;
 
-import sam.server.core.actormanagment.actorcollection;
-import sam.server.core.actormanagment.actorprovider;
-import sam.server.core.actormanagment.actorregistry;
-import sam.server.core.pipelines.messagereceiver;
-import sam.server.core.actormanagment.actorcollector;
-import sam.server.core.actormanagment.options;
+import sam.server.core.options;
+import sam.server.core.lifetime;
 import sam.server.core.lifecycle;
+import sam.server.core.introspection;
+import sam.server.core.actorprovider;
+import sam.server.core.pipelines.messagereceiver;
 
 import sam.client.messagesender;
 import sam.client.actorsystem;
 
-class ActorSystem
+class ActorSystem : IActorSystem
 {
-    private shared DependencyContainer m_container;
+    private Container m_container;
     private ActorRegistry m_actorRegistry;
+    private shared(ManualEvent) m_event = createSharedManualEvent();
+    private Task m_exitTask;
 
-    this(shared DependencyContainer container, ActorRegistry actorRegistry)
+    Container container()
+    {
+        return m_container;
+    }
+
+    this(Container container, ActorRegistry actorRegistry)
     {
         this.m_container = container.notNull;
         this.m_actorRegistry = actorRegistry.notNull;
     }
 
-    /** 
-     * Starts the actors system and the vibe-d eventloop
-     */
-    void start(string[]* args_out = null)
+    void start()
     {
-        logInfo("Starting the actor system...");
+        setExitListener();        
+
+        // Will get started once the event loop starts.
         auto startTask = runTask({
-            auto notifier = m_container.resolve!(SystemLifecycleNotifier);
-            notifier.notifyStarting();
-            notifier.notifyStarted();
-        });
-                
-        switchToTask(startTask);
-        runApplication(args_out);
+            try{
+                logInfo("Starting the actor system...");
+                auto manager = m_container.resolve!(SystemLifecycleManager)();
+                manager.start();
+            }
+            catch(Exception e)
+            {                
+                logError("ActorSystem start failed. " ~ e.toString());
+                exitEventLoop();
+            }
+        });        
     }
 
-    /** 
-     * Stops the actors system and the vibe-d eventloop
-     */
     void stop()
     {
-        logInfo("Stopping the actor system...");
-        auto stopTask = runTask({
-            auto notifier = m_container.resolve!(SystemLifecycleNotifier);
-            notifier.notifyStopping();
+        logDebug("Stopping the actor system...");
+        // Event loop should be running here.
+        auto manager = m_container.resolve!(SystemLifecycleManager)();
+        manager.stop();
 
-            logInfo("Actor system stopped.");
+        logInfo("Actor system stopped.");
+    }
+
+    private void setExitListener()
+    {
+        eventDriver.signals.listen(SIGINT, &onExit);
+        m_exitTask = runTask({
+            m_event.wait();
+            stop();
             exitEventLoop();
         });
-
-        // FIXME: Check if event loop is already running!
-        runEventLoop();
-    }
-
-    ActorSystemClient clientOf()
+    }    
+    
+    private void onExit(SignalListenID id, SignalStatus status, int i)
+    nothrow @safe
     {
-        return new ActorSystemClient(m_container.resolve!IMessageSender);
-    }
-}
-
-class ActorSystemBuilder
-{
-    private shared DependencyContainer m_container;
-    private ActorRegistry m_actorRegistry;
-
-    shared(DependencyContainer) container()
-    {
-        return m_container;
-    }
-
-    this()
-    {
-        m_container = new shared DependencyContainer;
-        m_container.register!DependencyContainer()
-            .existingInstance(cast(DependencyContainer) m_container);
-        m_container.register!ActorRegistry;
-        m_actorRegistry = m_container.resolve!ActorRegistry;
-    }
-
-    ActorSystemBuilder register(TIActor : IActor, TActor : IActor)()
-    {
-        m_actorRegistry.register!(TIActor, TActor)();
-        return this;
-    }
-
-    ActorSystem build()
-    {
-        auto notifier = m_container.resolve!(SystemLifecycleNotifier);
-        notifier.notifyBuilding();
-
-        auto actorSystem = new ActorSystem(m_container, m_actorRegistry);
-
-        notifier.notifyBuilt();
-        return actorSystem;
-    }
-}
-
-ActorSystemBuilder UseInMemoryActorSystem(ActorSystemBuilder builder)
-{
-    builder.container.UseDefaultOptions();
-    builder.container.UseCoreServices();
-
-    builder.container.register!(IMessageSender, MessageSender);
-    builder.container.register!(IMessageReceiver, MessageReceiver);
-    builder.container.register!(ActorProvider);
-
-    return builder;
-}
-
-private void UseCoreServices(shared(DependencyContainer) contianer)
-{
-    contianer.register!(SystemLifecycleNotifier);
-    contianer.registerLifecycleParticipant!(ActorCollection);
-    contianer.registerLifecycleParticipant!(ActorCollector);
-}
-
-private void UseDefaultOptions(shared(DependencyContainer) contianer)
-{
-    contianer.register!ActorLifetimeOptions();
-}
-
-private void registerLifecycleParticipant(TService : ILifecycleParticipant)(
-        shared(DependencyContainer) container)
-{
-    container.register!(TService)();
-    container.register!(ILifecycleParticipant, TService)();
+        import std.conv;
+        logDebug("Sig '" ~ i.to!string ~ "' received.");
+                
+        m_event.emit();
+    }    
 }

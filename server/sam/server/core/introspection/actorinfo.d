@@ -1,15 +1,18 @@
-module sam.server.core.actormanagment.actorinfo;
+module sam.server.core.introspection.actorinfo;
 
-import poodinis;
 import std.traits;
-import std.variant;
+
+import sam.common.argument;
 import sam.common.interfaces.actor;
 import sam.common.enforce;
 import sam.common.actormessage;
 import sam.common.actorresponse;
-import sam.server.core.actormanagment.actoractivator;
 
-alias ResolverFunc = IActor function(shared DependencyContainer contianer, string id);
+import sam.common.dependencyinjection;
+import sam.server.core.introspection.actoractivator;
+import sam.server.core.exceptions;
+
+alias ResolverFunc = IActor function(Container contianer, string id);
 
 class ActorInfo
 {
@@ -40,19 +43,20 @@ class ActorInfo
     }
 }
 
-ActorInfo actorInfo(TIActor : IActor, TActor : IActor)()
+ActorInfo actorInfo(TIActor : IActor, TActor:
+        IActor)()
         if (is(TIActor == interface) && !__traits(isTemplate, TIActor)
             && is(TActor == class) && !__traits(isTemplate, TActor))
 {
-    static IActor resolve(shared DependencyContainer container, string id)
+    static IActor resolve(Container container, string id)
     {
-        return new ActorActivator!TActor(cast(DependencyContainer) container).getInstance(id);
+        return new ActorActivator!TActor(container).getInstance(id);
     }
 
     return new ActorInfo(typeid(TIActor), &resolve, methodInfos!TIActor);
 }
 
-alias InvokeFunc = ActorResponse function(IActor, Variant[]);
+alias InvokeFunc = ActorResponse function(IActor, Argument[]);
 
 class MethodInfo
 {
@@ -109,28 +113,31 @@ MethodInfo[] methodInfos(TIActor : IActor)()
     return methodInfos;
 }
 
-ActorResponse invokeMethod(string methodName, alias overload, TIActor)(IActor obj, Variant[] vArgs)
+ActorResponse invokeMethod(string methodName, alias overload, TIActor)(IActor obj, Argument[] vArgs)
 {
     alias Params = Parameters!overload;
 
     Params args;
-    foreach (i, Param; Params)
+    static foreach (i, Param; Params)
     {
         args[i] = vArgs[i].get!Param;
     }
 
     auto actor = cast(TIActor) obj;
+    if (actor is null)
+    {
+        throw new InvalidActorTypeException("Invalid ActorType '" ~ TIActor.stringof
+                ~ "' when invoking method '" ~ methodName ~ "'. This exception should never happen.");
+    }
 
     static if (is(ReturnType!overload == void))
     {
         mixin("actor." ~ methodName)(args);
-        Variant v;
-        return new ActorResponse(v);
+        return new ActorResponse(null);
     }
     else
     {
-        Variant v;
-        v = mixin("actor." ~ methodName)(args);
-        return new ActorResponse(v);
+        ReturnType!overload val = mixin("actor." ~ methodName)(args);
+        return new ActorResponse(val);
     }
 }

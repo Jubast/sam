@@ -13,7 +13,7 @@ configuration "unittest-debug" {
 }
 
 configuration "unittest" {
-    dependency "silly" version="~>0.8.2"
+    dependency "silly" version="~>1.0.1"
     dependency "unit-threaded:mocks" version="~>0.10.3"
     dependency "fluent-asserts" version="~>0.12.5"
 }

@@ -1,16 +1,18 @@
 module sam.client.actorref;
 
 import std.stdio;
-import std.variant;
-import std.traits;
+import std.traits
+;
 import sam.common.enforce;
 import sam.common.exceptions;
 import sam.common.actormessage;
 import sam.common.actorresponse;
-import sam.client.messagesender;
-import sam.client.overrideprovider;
+import sam.common.argument;
 import sam.common.interfaces.actor;
 import sam.common.interfaces.messagesender;
+
+import sam.client.messagesender;
+import sam.client.overrideprovider;
 
 class ActorRef(TIActor : IActor)
 		if (is(TIActor == interface) && !__traits(isTemplate, TIActor))
@@ -28,22 +30,11 @@ class ActorRef(TIActor : IActor)
 	mixin(OverridesProvider!TIActor);
 
 	// Called by overriden methods of TIActor interface
-	private Variant send(Args...)(string method, Args args)
+	private Argument send(Args...)(string method, Args args)
 	{
-		auto message = new ActorMessage(typeid(TIActor), id, method, toVariants(args));
-		return messageSender.send(message).variant;
+		auto message = new ActorMessage(typeid(TIActor), id, method, args);
+		return messageSender.send(message).value;
 	}
-}
-
-private Variant[] toVariants(Args...)(Args args)
-{
-	auto variants = new Variant[Args.length];	
-	foreach(i, TArg; Args) 
-	{
-		variants[i] = args[i];
-	}	
-
-	return variants;
 }
 
 version (unittest)
@@ -56,24 +47,6 @@ version (unittest)
 	{
 		void test();
 	}
-}
-
-@("toVariants should return empty")
-unittest
-{	
-	auto variants = toVariants();
-	variants.length.should.equal(0);
-}
-
-@("toVariants should return all parameters")
-unittest
-{
-	auto obj = new Object;
-	auto variants = toVariants("test", 2, obj, new int[2]);
-	variants[0].get!(string).should.equal("test");
-	variants[1].get!(int).should.equal(2);
-	variants[2].get!(Object).should.equal(obj);
-	variants[3].get!(int[]).should.equal(new int[2]);
 }
 
 @("ctor should init members")
@@ -94,9 +67,8 @@ unittest
 	auto id = randomUUID.toString;
 	auto sender = mock!IMessageSender;
 
-	auto message = new ActorMessage(typeid(ITestActor), "test", id, toVariants());
-	Variant v;
-	auto response = new ActorResponse(v);
+	auto message = new ActorMessage(typeid(ITestActor), "test", id);
+	auto response = new ActorResponse(null);
 
 	sender.expect!"send"(message);
 	sender.returnValue!"send"(response);

@@ -11,7 +11,8 @@ import sam.common.actorresponse;
 import sam.common.interfaces.messagereceiver;
 
 import sam.server.core.exceptions;
-import sam.server.core.actormanagment.actorprovider;
+import sam.server.core.introspection;
+import sam.server.core.actorprovider;
 
 class MessageReceiver : IMessageReceiver
 {
@@ -25,7 +26,7 @@ class MessageReceiver : IMessageReceiver
 	// TODO: exceptions should not be handled here...
 	ActorResponse receive(ActorMessage message)
 	{
-	retry:
+		retry:
 		auto activation = provider.activationOf(message.actorType, message.actorId);
 
 		try

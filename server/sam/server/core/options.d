@@ -1,4 +1,4 @@
-module sam.server.core.actormanagment.options;
+module sam.server.core.options;
 
 import core.time;
 
